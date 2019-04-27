@@ -1,0 +1,86 @@
+//star-grid-clust-topo.cpp
+
+#include "ns3/core-module.h"
+#include "ns3/network-module.h"
+#include "ns3/ndnSIM-module.h"
+
+namespace ns3 {
+
+
+int
+main(int argc, char* argv[])
+{
+  CommandLine cmd;
+  cmd.Parse(argc, argv);
+
+  AnnotatedTopologyReader topologyReader("", 25);
+  topologyReader.SetFileName("src/ndnSIM/examples/topologies/star-grid-clust-topo.txt");
+  topologyReader.Read();
+
+  // Install NDN stack on all nodes
+  ndn::StackHelper ndnHelper;
+  ndnHelper.InstallAll();
+
+// 3. Install NDN stack
+ 
+  ndnHelper.SetOldContentStore("ns3::ndn::cs::Example", "MaxSize", "1000");
+ 
+  // Set BestRoute strategy
+  ndn::StrategyChoiceHelper::InstallAll("/", "/localhost/nfd/strategy/best-route");
+
+  // Installing global routing interface on all nodes
+  ndn::GlobalRoutingHelper ndnGlobalRoutingHelper;
+  ndnGlobalRoutingHelper.InstallAll();
+
+  // Getting containers for the consumer/producer
+   
+  Ptr<Node> producer1 = Names::Find<Node>("Node0");
+  Ptr<Node> producer2 = Names::Find<Node>("Node9");
+  Ptr<Node> producer3 = Names::Find<Node>("Node3");
+ 
+ 
+  NodeContainer consumerNodes;
+consumerNodes.Add(Names::Find<Node>("Node5"));
+
+  
+  // Install NDN applications
+  std::string prefix = "/prefix";
+
+  ndn::AppHelper consumerHelper("ns3::ndn::ConsumerCbr");
+  consumerHelper.SetPrefix(prefix);
+  consumerHelper.SetAttribute("Frequency", StringValue("100")); // 100 interests a second
+  consumerHelper.Install(consumerNodes);
+
+  ndn::AppHelper producerHelper("ns3::ndn::Producer");
+  producerHelper.SetPrefix(prefix);
+  producerHelper.SetAttribute("PayloadSize", StringValue("1024"));
+  producerHelper.Install(producer1);
+  producerHelper.Install(producer2);
+  producerHelper.Install(producer3);
+
+  // Add /prefix origins to ndn::GlobalRouter
+  ndnGlobalRoutingHelper.AddOrigins(prefix, producer1);
+  ndnGlobalRoutingHelper.AddOrigins(prefix, producer2);
+  ndnGlobalRoutingHelper.AddOrigins(prefix, producer3);
+
+  // Calculate and install FIBs
+  ndn::GlobalRoutingHelper::CalculateRoutes();
+
+  Simulator::Stop(Seconds(20.0));
+
+  ndn::L3RateTracer::InstallAll("rate-trace.txt", Seconds(0.5));
+
+
+  Simulator::Run();
+  Simulator::Destroy();
+
+  return 0;
+}
+
+} // namespace ns3
+
+int
+main(int argc, char* argv[])
+{
+  return ns3::main(argc, argv);
+}
